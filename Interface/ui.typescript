@@ -1,0 +1,655 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Brush, Eraser, Upload, Sparkles, Download, Info } from "lucide-react";
+
+// Single-file React app that can be dropped into any Vite/Next project.
+// Tailwind classes are used for styling. shadcn/ui components are referenced.
+// The app offers: image upload, optional mask painting, model+param selection,
+// and a pluggable API call to run inpainting on a backend.
+
+// -----------------------------
+// Utilities
+// -----------------------------
+const SAMPLE_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='800' viewBox='0 0 1200 800'>
+    <defs>
+      <linearGradient id='g1' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0%' stop-color='#f5e6d3'/>
+        <stop offset='100%' stop-color='#e6d2b5'/>
+      </linearGradient>
+      <linearGradient id='g2' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0%' stop-color='#214e34'/>
+        <stop offset='100%' stop-color='#3b7c54'/>
+      </linearGradient>
+      <filter id='grain'>
+        <feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/>
+        <feColorMatrix type='saturate' values='0.2'/>
+        <feBlend mode='multiply'/>
+      </filter>
+    </defs>
+    <rect width='1200' height='800' fill='url(#g1)'/>
+    <g opacity='0.8'>
+      <path d='M-50,650 C250,520 450,560 700,640 C900,700 1150,680 1300,600 L1300,850 L-50,850 Z' fill='url(#g2)'/>
+      <circle cx='260' cy='320' r='140' fill='#c74b32' fill-opacity='0.85'/>
+      <circle cx='330' cy='320' r='90' fill='#f8c24e' fill-opacity='0.85'/>
+      <rect x='720' y='200' width='260' height='280' rx='14' fill='#2b4c7e' fill-opacity='0.9'/>
+      <rect x='750' y='230' width='200' height='60' rx='8' fill='#f0efe9' />
+      <rect x='750' y='310' width='200' height='140' rx='8' fill='#d9d7cf' />
+    </g>
+    <g filter='url(#grain)' opacity='0.06'><rect width='1200' height='800' fill='black'/></g>
+    <g>
+      <path d='M150 580 Q 220 520 310 560 T 520 560 T 740 600' stroke='#8b5e34' stroke-width='22' stroke-linecap='round' fill='none' opacity='0.35'/>
+      <path d='M170 600 Q 240 540 330 580 T 540 580 T 760 620' stroke='#3f2e17' stroke-width='10' stroke-linecap='round' fill='none' opacity='0.25'/>
+    </g>
+  </svg>`
+)}`;
+
+// Damaged sample (same painting with scratches, stains, missing patch)
+const SAMPLE_DAMAGED_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='800' viewBox='0 0 1200 800'>
+    <defs>
+      <linearGradient id='g1' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0%' stop-color='#f5e6d3'/>
+        <stop offset='100%' stop-color='#e6d2b5'/>
+      </linearGradient>
+      <linearGradient id='g2' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0%' stop-color='#214e34'/>
+        <stop offset='100%' stop-color='#3b7c54'/>
+      </linearGradient>
+      <filter id='grain'>
+        <feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/>
+        <feColorMatrix type='saturate' values='0.2'/>
+        <feBlend mode='multiply'/>
+      </filter>
+    </defs>
+    <rect width='1200' height='800' fill='url(#g1)'/>
+    <g opacity='0.8'>
+      <path d='M-50,650 C250,520 450,560 700,640 C900,700 1150,680 1300,600 L1300,850 L-50,850 Z' fill='url(#g2)'/>
+      <circle cx='260' cy='320' r='140' fill='#c74b32' fill-opacity='0.85'/>
+      <circle cx='330' cy='320' r='90' fill='#f8c24e' fill-opacity='0.85'/>
+      <rect x='720' y='200' width='260' height='280' rx='14' fill='#2b4c7e' fill-opacity='0.9'/>
+      <rect x='750' y='230' width='200' height='60' rx='8' fill='#f0efe9' />
+      <rect x='750' y='310' width='200' height='140' rx='8' fill='#d9d7cf' />
+    </g>
+    <g filter='url(#grain)' opacity='0.06'><rect width='1200' height='800' fill='black'/></g>
+    <!-- damage overlay -->
+    <g opacity='0.9'>
+      <path d='M80 120 L1120 160' stroke='#fffff0' stroke-width='6' stroke-linecap='round' opacity='0.6'/>
+      <path d='M120 220 L1100 260' stroke='#fffff0' stroke-width='4' stroke-linecap='round' opacity='0.5'/>
+      <path d='M200 100 L240 700' stroke='#fffff0' stroke-width='3' stroke-linecap='round' opacity='0.4'/>
+      <path d='M890 140 L860 640' stroke='#fffff0' stroke-width='5' stroke-linecap='round' opacity='0.45'/>
+      <!-- stain -->
+      <ellipse cx='520' cy='420' rx='140' ry='80' fill='#d2c9a0' opacity='0.35'/>
+      <!-- missing patch (torn) -->
+      <rect x='260' y='280' width='120' height='100' fill='#eae6dc' stroke='#c9c4b8' stroke-dasharray='6 6' opacity='0.8'/>
+    </g>
+  </svg>`
+)}`;
+
+const SAMPLE_RESTORED_SVG = SAMPLE_SVG;
+
+const loadImage = (file: File): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+
+const dataURLToBlob = (dataURL: string) => {
+  const arr = dataURL.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new Blob([u8arr], { type: mime });
+};
+
+const dataUrlToFile = async (dataUrl: string, filename: string) => {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
+};
+
+
+// -----------------------------
+// Canvas Mask Painter
+// -----------------------------
+function MaskPainter({
+  baseImage,
+  width,
+  height,
+  brushSize,
+  erase,
+  onMaskChange,
+}: {
+  baseImage: HTMLImageElement | null;
+  width: number;
+  height: number;
+  brushSize: number;
+  erase: boolean;
+  onMaskChange: (maskCanvas: HTMLCanvasElement) => void;
+}) {
+  const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isPaintingRef = useRef(false);
+  const [ready, setReady] = useState(false);
+
+  // draw base image
+  useEffect(() => {
+    const imgCanvas = imgCanvasRef.current;
+    if (!imgCanvas) return;
+    const ctx = imgCanvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, width, height);
+    if (baseImage) {
+      // Fit image into the canvas while preserving aspect ratio
+      const iw = baseImage.width;
+      const ih = baseImage.height;
+      const scale = Math.min(width / iw, height / ih);
+      const w = iw * scale;
+      const h = ih * scale;
+      const x = (width - w) / 2;
+      const y = (height - h) / 2;
+      ctx.drawImage(baseImage, x, y, w, h);
+    }
+    setReady(true);
+  }, [baseImage, width, height]);
+
+  // notify mask changes
+  const emitMask = () => {
+    if (paintCanvasRef.current) onMaskChange(paintCanvasRef.current);
+  };
+
+  // painting handlers
+  useEffect(() => {
+    const paintCanvas = paintCanvasRef.current;
+    if (!paintCanvas) return;
+    const ctx = paintCanvas.getContext("2d");
+    if (!ctx) return;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const getPos = (e: MouseEvent | TouchEvent) => {
+      const rect = paintCanvas.getBoundingClientRect();
+      const clientX = (e as TouchEvent).touches
+        ? (e as TouchEvent).touches[0].clientX
+        : (e as MouseEvent).clientX;
+      const clientY = (e as TouchEvent).touches
+        ? (e as TouchEvent).touches[0].clientY
+        : (e as MouseEvent).clientY;
+      return {
+        x: ((clientX - rect.left) / rect.width) * paintCanvas.width,
+        y: ((clientY - rect.top) / rect.height) * paintCanvas.height,
+      };
+    };
+
+    const start = (e: MouseEvent | TouchEvent) => {
+      isPaintingRef.current = true;
+      const { x, y } = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    };
+
+    const move = (e: MouseEvent | TouchEvent) => {
+      if (!isPaintingRef.current) return;
+      const { x, y } = getPos(e);
+      ctx.lineWidth = brushSize;
+      if (erase) {
+        ctx.globalCompositeOperation = "destination-out"; // erase
+      } else {
+        ctx.globalCompositeOperation = "source-over"; // paint
+        ctx.strokeStyle = "rgba(255,255,255,1)"; // white mask
+      }
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      emitMask();
+    };
+
+    const end = () => {
+      isPaintingRef.current = false;
+      ctx.closePath();
+      emitMask();
+    };
+
+    // listeners
+    paintCanvas.addEventListener("mousedown", start as any);
+    window.addEventListener("mousemove", move as any);
+    window.addEventListener("mouseup", end);
+    paintCanvas.addEventListener("touchstart", start as any);
+    window.addEventListener("touchmove", move as any, { passive: false });
+    window.addEventListener("touchend", end);
+
+    return () => {
+      paintCanvas.removeEventListener("mousedown", start as any);
+      window.removeEventListener("mousemove", move as any);
+      window.removeEventListener("mouseup", end);
+      paintCanvas.removeEventListener("touchstart", start as any);
+      window.removeEventListener("touchmove", move as any);
+      window.removeEventListener("touchend", end);
+    };
+  }, [brushSize, erase]);
+
+  const clearMask = () => {
+    const c = paintCanvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+    emitMask();
+  };
+
+  return (
+    <div className="relative w-full">
+      <div className="rounded-2xl overflow-hidden border shadow-sm bg-black/5">
+        <canvas ref={imgCanvasRef} width={width} height={height} className="w-full h-auto block" />
+        <canvas
+          ref={paintCanvasRef}
+          width={width}
+          height={height}
+          className="absolute inset-0 w-full h-full cursor-crosshair"
+          style={{ mixBlendMode: "normal" }}
+        />
+      </div>
+      <div className="flex items-center gap-3 mt-3">
+        <Button variant="secondary" onClick={clearMask} type="button">Clear mask</Button>
+        {!ready && (
+          <span className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Preparing…</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------
+// Main App
+// -----------------------------
+export default function ArtworkRepairApp() {
+  const [file, setFile] = useState<File | null>(null);
+  const [imageEl, setImageEl] = useState<HTMLImageElement | null>(null);
+  const [maskProvided, setMaskProvided] = useState<File | null>(null);
+
+  const [brush, setBrush] = useState(28);
+  const [erase, setErase] = useState(false);
+  const painterRef = useRef<HTMLCanvasElement | null>(null);
+  const [maskCanvas, setMaskCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  const [model, setModel] = useState<"lama" | "diffusion" | "gan">("lama");
+  const [strength, setStrength] = useState(0.85); // guidance for diffusion or blend for conv
+  const [seed, setSeed] = useState(1234);
+  const [edgeAware, setEdgeAware] = useState(true);
+
+  const [busy, setBusy] = useState(false);
+  const [resultURL, setResultURL] = useState<string | null>(null);
+
+  // derived canvas size
+  const canvasDims = useMemo(() => ({ width: 768, height: 512 }), []);
+
+  // Load preview image element
+  useEffect(() => {
+    if (!file) { setImageEl(null); return; }
+    loadImage(file).then(setImageEl).catch(() => setImageEl(null));
+  }, [file]);
+
+  const handleMaskChange = (c: HTMLCanvasElement) => setMaskCanvas(c);
+
+  const reset = () => {
+    setResultURL(null);
+  };
+
+  // -----------------------------
+  // Mock or Real Inference
+  // -----------------------------
+  async function runInference() {
+    if (!file) return;
+    setBusy(true);
+    setResultURL(null);
+
+    // If you have a backend, POST formData to /api/inpaint (example below).
+    // Otherwise, we create a quick demo by blending a mild inpaint effect
+    // using the mask area.
+
+    try {
+      // Compose inputs
+      let maskBlob: Blob | undefined;
+      if (maskProvided) {
+        maskBlob = maskProvided;
+      } else if (maskCanvas) {
+        maskBlob = dataURLToBlob(maskCanvas.toDataURL("image/png"));
+      }
+
+      // If you have a server, uncomment and implement:
+      // const form = new FormData();
+      // form.append("image", file);
+      // if (maskBlob) form.append("mask", maskBlob, "mask.png");
+      // form.append("model", model);
+      // form.append("strength", String(strength));
+      // form.append("seed", String(seed));
+      // form.append("edgeAware", String(edgeAware));
+      // const resp = await fetch("/api/inpaint", { method: "POST", body: form });
+      // const buf = await resp.arrayBuffer();
+      // const outUrl = URL.createObjectURL(new Blob([buf]));
+      // setResultURL(outUrl);
+
+      // ---- Demo-only local render: apply a gentle blur inside mask and clone from surroundings
+      const base = await loadImage(file);
+      const off = document.createElement("canvas");
+      off.width = base.width; off.height = base.height;
+      const octx = off.getContext("2d")!;
+      octx.drawImage(base, 0, 0);
+
+      if (maskBlob) {
+        const maskImg = await loadImage(new File([maskBlob], "mask.png", { type: "image/png" }));
+        // resize mask to base size
+        const maskOff = document.createElement("canvas");
+        maskOff.width = base.width; maskOff.height = base.height;
+        const mctx = maskOff.getContext("2d")!;
+
+        // draw resized mask centered to match painter canvas placement heuristic
+        // For simplicity, stretch to fit; real backend should align properly.
+        mctx.drawImage(maskImg, 0, 0, maskOff.width, maskOff.height);
+
+        // fake inpaint: blur masked area + light noise
+        octx.save();
+        octx.globalCompositeOperation = "destination-over";
+        octx.filter = `blur(${Math.round(6 + 10 * (1 - strength))}px)`;
+        octx.drawImage(maskOff, 0, 0);
+        octx.restore();
+
+        // punch the mask to blend
+        octx.globalCompositeOperation = "destination-out";
+        octx.drawImage(maskOff, 0, 0);
+        octx.globalCompositeOperation = "destination-over";
+        octx.filter = "none";
+        octx.drawImage(base, 0, 0);
+        octx.globalCompositeOperation = "source-over";
+      }
+
+      setResultURL(off.toDataURL("image/png"));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canRun = !!file && (!busy);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-slate-900">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5"/>
+            <h1 className="font-semibold tracking-tight">ArtRepair • Learning-based Inpainting</h1>
+          </div>
+          <div className="hidden md:flex items-center gap-4 text-sm text-slate-600">
+            <a href="#playground" className="hover:text-slate-900">Playground</a>
+            <a href="#how" className="hover:text-slate-900">How it works</a>
+            <a href="#eval" className="hover:text-slate-900">Evaluation</a>
+            <a href="#about" className="hover:text-slate-900">About</a>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-12">
+        {/* Hero */}
+        <section className="grid md:grid-cols-2 gap-8 items-center">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold leading-tight">Repair damaged artwork while preserving style and brushwork</h2>
+            <p className="mt-3 text-slate-600">Upload a damaged image, paint or upload a mask, pick a model, and generate a restoration. This UI is model-agnostic and can call your backend inpainting endpoint.</p>
+            <div className="mt-4 flex gap-3">
+              <a href="#playground"><Button><Sparkles className="w-4 h-4 mr-2"/>Try the playground</Button></a>
+              <a href="#how"><Button variant="outline"><Info className="w-4 h-4 mr-2"/>Learn more</Button></a>
+            </div>
+          </div>
+          <div className="rounded-2xl overflow-hidden border shadow bg-white p-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="aspect-video rounded-lg bg-gradient-to-br from-slate-200 to-slate-100"/>
+              <div className="aspect-video rounded-lg bg-gradient-to-br from-slate-200 to-slate-100"/>
+              <div className="col-span-2 aspect-[3/1] rounded-lg bg-gradient-to-br from-slate-200 to-slate-100"/>
+            </div>
+            <p className="text-xs text-center text-slate-500 mt-2">Before / mask / after preview (live once you upload)</p>
+          </div>
+        </section>
+
+        {/* Playground */}
+        <section id="playground" className="scroll-mt-20">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Playground</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid lg:grid-cols-3 gap-8">
+                {/* Left: Inputs */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Damaged artwork image</Label>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <Input type="file" accept="image/*" onChange={(e)=>{const f=e.target.files?.[0]||null; setFile(f); reset();}}/>
+                        <Button variant="outline" type="button" onClick={()=>{setFile(null); setImageEl(null); reset();}}>Clear</Button>
+                        <Button type="button" variant="secondary" onClick={async ()=>{ const f = await dataUrlToFile(SAMPLE_DAMAGED_SVG, 'damaged_sample.svg'); setFile(f); reset(); }}>
+                          <Upload className="w-4 h-4 mr-2"/> Use damaged sample
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={()=>{ setResultURL(SAMPLE_RESTORED_SVG); }}>
+                          Show corrected sample
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Optional mask upload</Label>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input type="file" accept="image/*" onChange={(e)=>{const f=e.target.files?.[0]||null; setMaskProvided(f);}}/>
+                        <Button variant="outline" type="button" onClick={()=>setMaskProvided(null)}>Clear</Button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">If not provided, paint the repair region below.</p>
+                    </div>
+                  </div>
+
+                  <Tabs defaultValue="paint" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="paint">Paint a mask</TabsTrigger>
+                      <TabsTrigger value="preview">Preview</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="paint" className="mt-4 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Brush className="w-4 h-4"/>
+                          <span className="text-sm">Brush</span>
+                          <Slider className="w-40 ml-3" value={[brush]} min={4} max={120} step={2} onValueChange={(v)=>setBrush(v[0])}/>
+                          <span className="text-xs text-slate-500 w-10 text-right">{brush}px</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch id="erase" checked={erase} onCheckedChange={setErase}/>
+                          <Label htmlFor="erase" className="cursor-pointer flex items-center gap-2"><Eraser className="w-4 h-4"/>Erase</Label>
+                        </div>
+                      </div>
+
+                      <MaskPainter
+                        baseImage={imageEl}
+                        width={canvasDims.width}
+                        height={canvasDims.height}
+                        brushSize={brush}
+                        erase={erase}
+                        onMaskChange={setMaskCanvas}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="preview" className="mt-4">
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Original</Label>
+                          <div className="rounded-lg overflow-hidden border bg-white">
+                            {file ? (
+                              <img src={URL.createObjectURL(file)} className="w-full h-auto" alt="original"/>
+                            ) : (
+                              <div className="aspect-video bg-slate-100"/>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Mask</Label>
+                          <div className="rounded-lg overflow-hidden border bg-white">
+                            {maskProvided ? (
+                              <img src={URL.createObjectURL(maskProvided)} className="w-full h-auto" alt="mask"/>
+                            ) : maskCanvas ? (
+                              <img src={maskCanvas.toDataURL()} className="w-full h-auto" alt="mask"/>
+                            ) : (
+                              <div className="aspect-video bg-slate-100"/>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Result</Label>
+                          <div className="rounded-lg overflow-hidden border bg-white relative">
+                            {resultURL ? (
+                              <img src={resultURL} className="w-full h-auto" alt="result"/>
+                            ) : (
+                              <div className="aspect-video bg-slate-100 flex items-center justify-center text-slate-400 text-sm">No result yet</div>
+                            )}
+                            {busy && (
+                              <div className="absolute inset-0 bg-white/60 backdrop-blur flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 animate-spin"/>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+
+                {/* Right: Settings */}
+                <div className="space-y-6">
+                  <Card className="shadow-none border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-base">Model and parameters</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <RadioGroup value={model} onValueChange={(v)=>setModel(v as any)}>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="lama" id="lama" />
+                          <Label htmlFor="lama">LaMa style (fast CNN)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="diffusion" id="diff" />
+                          <Label htmlFor="diff">Diffusion + LoRA (highest fidelity)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="gan" id="gan" />
+                          <Label htmlFor="gan">GAN inpainting (classic)</Label>
+                        </div>
+                      </RadioGroup>
+
+                      <div>
+                        <Label>Strength</Label>
+                        <Slider value={[strength]} min={0.3} max={1.0} step={0.01} onValueChange={(v)=>setStrength(Number(v))} />
+                        <p className="text-xs text-slate-500 mt-1">Lower values keep more of the original; higher values allow stronger fills.</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>Seed</Label>
+                          <Input type="number" value={seed} onChange={(e)=>setSeed(parseInt(e.target.value||"0"))} />
+                        </div>
+                        <div className="flex items-center gap-2 mt-7">
+                          <Switch id="edgeAware" checked={edgeAware} onCheckedChange={setEdgeAware}/>
+                          <Label htmlFor="edgeAware">Edge aware blending</Label>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button disabled={!canRun} onClick={runInference}>
+                          {busy ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Restoring…</>) : (<><Sparkles className="w-4 h-4 mr-2"/> Restore</>)}
+                        </Button>
+                        <Button variant="outline" disabled={!resultURL} onClick={()=>{ if(resultURL){ const a=document.createElement('a'); a.href=resultURL; a.download='artrepair_result.png'; a.click(); } }}>
+                          <Download className="w-4 h-4 mr-2"/> Download
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-none border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-base">API wiring</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm text-slate-600">
+                      <p>Hook up your backend by implementing a POST endpoint <code className="px-1 py-0.5 rounded bg-slate-100">/api/inpaint</code> that accepts fields <code>image</code>, <code>mask</code> (PNG, white where to fill), <code>model</code>, <code>strength</code>, <code>seed</code>, and <code>edgeAware</code>, returning a PNG or JPEG.</p>
+                      <p>The current demo performs a local placeholder effect so the UI is usable without a server.</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* How it works */}
+        <section id="how" className="scroll-mt-20">
+          <Card>
+            <CardHeader>
+              <CardTitle>How it works</CardTitle>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-3 gap-6 text-slate-700">
+              <div>
+                <h4 className="font-semibold mb-2">1. Detect</h4>
+                <p>Optionally run a lightweight U-Net to localize damage when a mask is not provided. This mask guides where to inpaint.</p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">2. Inpaint</h4>
+                <p>Use a style-aware model such as LaMa, diffusion with LoRA, or gated-conv GAN to synthesize plausible content that matches the artwork style.</p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">3. Blend</h4>
+                <p>Edge-aware blending plus optional color harmonization to remove seams and keep brushwork consistent with surrounding context.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Evaluation */}
+        <section id="eval" className="scroll-mt-20">
+          <Card>
+            <CardHeader>
+              <CardTitle>Evaluation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-slate-700">
+              <p>Track objective metrics on synthetic damage (SSIM/PSNR on masked regions, LPIPS for perceptual distance) and collect human preferences on real cases.</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="rounded-xl border p-4 bg-white"><div className="text-2xl font-semibold">↑ SSIM</div><p className="text-sm text-slate-500">Structure similarity on filled areas</p></div>
+                <div className="rounded-xl border p-4 bg-white"><div className="text-2xl font-semibold">↓ LPIPS</div><p className="text-sm text-slate-500">Perceptual distance from ground truth</p></div>
+                <div className="rounded-xl border p-4 bg-white"><div className="text-2xl font-semibold">↓ Seams</div><p className="text-sm text-slate-500">Human-rated seam visibility</p></div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* About */}
+        <section id="about" className="scroll-mt-20">
+          <Card>
+            <CardHeader>
+              <CardTitle>About this project</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-slate-700">
+              <p>This UI was designed for a two-stage restoration pipeline: damage detection and style-aware inpainting. It stays backend-agnostic so you can swap in your own models and datasets.</p>
+              <p>Ethics note: Always keep provenance and store the original. Flag AI-restored regions in metadata for curatorial transparency.</p>
+            </CardContent>
+          </Card>
+        </section>
+      </main>
+
+      <footer className="py-10 text-center text-sm text-slate-500">
+        Built with React, Tailwind, and shadcn/ui. Drop this component into a Next.js page and connect your <code className="px-1 py-0.5 rounded bg-slate-100">/api/inpaint</code> endpoint.
+      </footer>
+    </div>
+  );
+}
