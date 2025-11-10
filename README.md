@@ -12,8 +12,11 @@ A lightweight UI allows users to upload an image, define a mask (manually or aut
 ## 📁 Project Structure
 ```
 .
-├── Notebooks              # Contains the python scripts
-├── Reports                # contains the report related to project
+├─ src/
+│  └─ setup.ipynb             # Contains the python scripts
+├─ notes/
+│  ├─ docx/
+├── Report                # contains the report related to project
 └── README.md              # README.md
 ```
 
