@@ -1,0 +1,14 @@
+# Python 3.10 recommended
+torch>=2.3.0
+torchvision>=0.18.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+numpy>=1.24
+Pillow>=10.0
+tqdm>=4.66
+PyYAML>=6.0
+opencv-python>=4.9
+scikit-image>=0.24
+albumentations>=1.4
+lpips>=0.1.4
+einops>=0.8.0

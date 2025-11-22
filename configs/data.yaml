@@ -1,0 +1,4 @@
+image_size: 512
+root: ./data
+raw_root: ./data/raw
+masks_root: ./data/masks

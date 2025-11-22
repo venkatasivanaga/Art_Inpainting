@@ -1,0 +1,13 @@
+img_size: 512
+batch_size: 8
+epochs: 80
+optim: { g_lr: 2.0e-4, d_lr: 1.0e-4, betas: [0.5, 0.999] }
+loss:
+  lambda_l1: 1.0
+  lambda_perc: 0.5
+  lambda_style: 0.25
+  lambda_adv: 0.8
+  lambda_tv: 0.02
+band_px: 12
+edge_guidance: true
+mixed_precision: true
