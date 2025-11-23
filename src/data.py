@@ -1,14 +1,15 @@
 # data.py
 # CSV split builder + PyTorch Dataset that emits (image, mask) tensors.
+from PIL import Image      # <-- add this at module level
+import numpy as np
+import albumentations as A
+import cv2
 import argparse, os, glob, csv, random
 from pathlib import Path
 from typing import Optional, Tuple
 import yaml
-import numpy as np
-from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
-import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 def read_yaml(p):
@@ -69,7 +70,13 @@ class ImageMaskDataset(Dataset):
         if augment:
             self.tf = A.Compose([
                 A.LongestMaxSize(max_size=img_size),
-                A.PadIfNeeded(min_height=img_size, min_width=img_size, border_mode=0, value=(0,0,0)),
+                A.PadIfNeeded(
+                    min_height=img_size, min_width=img_size,
+                    border_mode=cv2.BORDER_CONSTANT,
+                    value=(0, 0, 0),
+                    mask_value=0,
+                ),
+
                 A.HorizontalFlip(p=0.5),
                 A.ColorJitter(p=0.2, brightness=0.1, contrast=0.1, saturation=0.1, hue=0.03),
                 ToTensorV2(),
@@ -91,7 +98,40 @@ class ImageMaskDataset(Dataset):
         # apply same spatial transform to both
         r = self.tf(image=img, mask=mask)
         img_t = r["image"].float() / 255.0               # [3,H,W]
-        mask_t = torch.from_numpy(r["mask"]).unsqueeze(0).float()  # [1,H,W]
+        # ...
+        m = r["mask"]  # could be np.ndarray, PIL, or torch.Tensor
+
+        # If Albumentations already gave you a torch.Tensor, keep it.
+        if torch.is_tensor(m):
+            mask_t = m
+        else:
+            # if it's PIL → to np
+            try:
+                from PIL import Image
+                if isinstance(m, Image.Image):
+                    m = np.array(m)
+            except Exception:
+                pass
+            # now ensure numpy → tensor
+            mask_t = torch.from_numpy(m)
+
+        # shape to [1,H,W], float in {0,1}
+        if mask_t.ndim == 3:
+            # if it came as [H,W,1] or [H,W,3], squeeze/channel-pick
+            if mask_t.shape[-1] > 1:
+                # take first channel if mask has 3 channels
+                mask_t = mask_t[..., 0]
+            mask_t = mask_t.permute(2, 0, 1) if mask_t.ndim == 3 else mask_t
+        if mask_t.ndim == 2:
+            mask_t = mask_t.unsqueeze(0)
+
+        mask_t = mask_t.float()
+        # Normalize to 0/1 if values are 0..255
+        if mask_t.max() > 1.5:
+            mask_t = mask_t / 255.0
+        # binarize (optional but safer)
+        mask_t = (mask_t > 0.5).float()
+
         return {"image": img_t, "mask": mask_t, "image_path": ip, "mask_path": mp}
 
 def make_loader(csv_file, img_size, batch, shuffle, num_workers=4, augment=True):

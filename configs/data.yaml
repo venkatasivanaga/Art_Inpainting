@@ -1,4 +1,9 @@
-image_size: 512
-root: ./data
-raw_root: ./data/raw
-masks_root: ./data/masks
+# configs/data.yaml
+# Use forward slashes on Windows to avoid escape issues
+raw_root: "C:/Users/vs.naga/Documents/ML_proj/aml/AI_for_Art_Restoration_2/unpaired_dataset_art"
+masks_root: "data/masks"
+
+# Optional split settings (used by src.data)
+val_ratio: 0.1
+test_ratio: 0.1
+seed: 1234

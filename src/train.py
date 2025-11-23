@@ -6,8 +6,11 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from torch.cuda.amp import GradScaler, autocast
-from data import make_loader, read_yaml
-from model import GatedUNet, PatchDiscriminator, sample_boundary_tiles, LossBundle, l1_in_hole
+
+from src.data import make_loader, read_yaml
+from src.model import GatedUNet, PatchDiscriminator, sample_boundary_tiles
+from src.losses import LossBundle, l1_in_hole
+
 
 def save_ckpt(path, model_g, opt_g, step, best_val):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
