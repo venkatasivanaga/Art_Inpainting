@@ -11,13 +11,38 @@ A lightweight UI allows users to upload an image, define a mask (manually or aut
 
 ## 📁 Project Structure
 ```
-.
-├─ src/
-│  └─ setup.ipynb             # Contains the python scripts
-├─ notes/
-│  ├─ docx/
-├── Report                # contains the report related to project
-└── README.md              # README.md
+Art_Inpainting/
+├─ README.md
+├─ env.yml                  # conda env (Windows CUDA) – or use requirements.txt on macOS
+├─ requirements.txt         # minimal pip env (macOS / CPU/MPS friendly)
+├─ .gitignore
+├─ pyproject.toml           # Optional: project metadata / build
+├─ git_repo_link.txt        # Handy link/reference to this repo
+├─ setup.ipynb              # One-time environment & sanity checks
+│
+├─ configs/
+│  ├─ data.yaml             # paths, image size, split sizes
+│  └─ inpaint_gan.yaml      # model + loss weights + training params
+│
+├─ data/     #contains the info about data
+│
+│
+└─ src/
+   ├─ __init__.py
+   ├─ api.py               # FastAPI server (/api/inpaint)
+   ├─ data.py              # dataset, transforms, split builder, loader
+   ├─ infer.py             # CLI inference over images/folders
+   ├─ losses.py            # LossBundle (+masked L1, boundary L1, LPIPS, Gram, TV)
+   ├─ masks.py             # mask generators (irregular + edge/ridge)
+   ├─ model.py             # GatedUNet + PatchDiscriminator + utils
+   ├─ setup.ipynb          # notebook helper (optional)
+   └─ train.py             # training loop
+├─ web/
+│  ├─ ui.typescript       # Interface
+│
+├─ reports/                   # Contains IEEE reports
+└─ notes/                   # experiments, TODOs, ablation notes
+             # README.md
 ```
 
 ---
