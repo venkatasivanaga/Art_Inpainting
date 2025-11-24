@@ -119,13 +119,18 @@ Run the dataset download commands above or execute `setup.ipynb`.
 **Stage 1 — Home page UI**  
 ![UI — empty state](Results/Interface.jpg)
 
-**Stage 1 result**  
+**Result 1**  
 ![UI — Output1](Results/Output1.jpg)
 
-**Stage 2 result (colorization / final)**  
+**Result 2**  
 ![UI — Output2](Results/Output2.jpg)
 
 --- 
+## 🙏 Acknowledgments
+
+LaMa, Gated Convolution inpainting, LPIPS, and PatchGAN ideas that inspired components of this repo. Thanks to dataset contributors on Kaggle.
+
+---
 
 ## 👩‍💻 Author
 **Venkata Siva Reddy Naga**  
