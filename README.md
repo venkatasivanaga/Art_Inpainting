@@ -114,6 +114,19 @@ Run the dataset download commands above or execute `setup.ipynb`.
 
 ---
 
+## 🖼️ Sample Outputs (UI)
+
+**Stage 1 — Home page UI**  
+![UI — empty state](Results/Interface.jpg)
+
+**Stage 1 result**  
+![UI — Output1](Results/Output1.jpg)
+
+**Stage 2 result (colorization / final)**  
+![UI — Output2](Results/Output2.jpg)
+
+--- 
+
 ## 👩‍💻 Author
 **Venkata Siva Reddy Naga**  
 _Data Science | vs.naga@ufl.edu 
