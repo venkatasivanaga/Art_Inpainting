@@ -100,6 +100,66 @@ cd Art_Inpainting
 ```bash
 Run the dataset download commands above or execute `setup.ipynb`.
 ```
+### 3. Generate Masks (irregular + crack-like)
+```bash
+python -m src.masks \
+  --image-root "data/unpaired_dataset_art" \
+  --out data/masks \
+  --per-image 2 \
+  --edge crack --frangi
+```
+### 4. Make Train/Val/Test Splits
+```bash
+python -m src.data \
+  --data-config configs/data.yaml \
+  --make-splits \
+  --out data/splits
+
+```
+Outputs text files of image basenames in data/splits/ (e.g., train.txt, val.txt, test.txt).
+### 5. Train the Inpainting GAN
+```bash
+python -m src.train \
+  --data-config configs/data.yaml \
+  --config configs/inpaint_gan.yaml \
+  --splits data/splits \
+  --out runs/gan_512
+```
+
+Model: Gated-Conv U-Net + seam-focused PatchGAN
+
+Losses: masked L1, boundary L1, LPIPS, Gram(style), TV
+
+Checkpoints & logs will appear under runs/gan_512/.
+
+### 6. Inference (CLI)
+
+Single image
+```bash
+python -m src.infer \
+  --image path/to/damaged.jpg \
+  --mask  path/to/mask.png \
+  --ckpt  runs/gan_512/best.pt \
+  --out   outputs/restored.png
+```
+
+Batch folder
+```bash
+python -m src.infer \
+  --input path/to/folder_or_image \
+  --checkpoint runs/gan_512/best.pt \
+  --output outputs/
+```
+### 7. Start the REST API (FastAPI)
+```bash 
+uvicorn api:app --app-dir src --host 0.0.0.0 --port 8000
+# Docs: http://127.0.0.1:8000/docs
+```
+### 8. Run the streamlit interface (two-panel demo)
+
+Left: upload damaged image (and optional mask).
+
+Right: “Show results” for paired demo or wire to the API.
 ---
 
 ## 🗓️ Implementation Timeline
@@ -126,6 +186,7 @@ Run the dataset download commands above or execute `setup.ipynb`.
 ![UI — Output2](Results/Output2.jpg)
 
 --- 
+
 ## 🙏 Acknowledgments
 
 LaMa, Gated Convolution inpainting, LPIPS, and PatchGAN ideas that inspired components of this repo. Thanks to dataset contributors on Kaggle.
